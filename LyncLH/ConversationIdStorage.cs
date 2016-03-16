@@ -5,6 +5,11 @@ namespace SkyForBusLH
     public class ConversationIdStorage
     {
         private readonly string _folder;
+
+        public ConversationIdStorage() : this(Storage.ConversationIdStorageFolder)
+        {
+        }
+
         public ConversationIdStorage(string folder)
         {
             _folder = folder;

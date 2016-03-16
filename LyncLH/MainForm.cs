@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Windows.Forms;
 using Microsoft.Lync.Model.Conversation;
-using System.IO;
 using Microsoft.Lync.Model;
 using SkyForBusLH.Properties;
 
@@ -14,10 +12,7 @@ namespace SkyForBusLH
         static readonly Dictionary<Conversation, ConversationContainer> ActiveConversations =
             new Dictionary<Conversation, ConversationContainer>();
         static Self _myself;
-        static readonly string MyDocsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        static readonly string AppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        private const string ProgramFolder = "LyncIMHistory";
-        private const string AllInOneFileName = @"AllLyncIMHistory.txt";
+        
 
         public MainForm()
         {
@@ -36,9 +31,8 @@ namespace SkyForBusLH
         private ConversationIdStorage _idStorage;
         public bool ConnectAndPrepare()
         {
-            EnsureDirectoryExists(Path.Combine(MyDocsPath, ProgramFolder));
-            EnsureDirectoryExists(Path.Combine(AppDataPath + ProgramFolder));
-            _idStorage = new ConversationIdStorage(AppDataPath + ProgramFolder);
+            Storage.EnsureDirectoriesExist();
+            _idStorage = new ConversationIdStorage();
 
             LyncClient client = GetLyncClient();
             if (client == null)
@@ -89,19 +83,11 @@ namespace SkyForBusLH
         {
             var imm = (InstantMessageModality)sender;
             ConversationContainer container = ActiveConversations[imm.Conversation];
+            string senderName = imm.Participant.Contact.GetContactInformation(ContactInformationType.DisplayName).ToString();
+            string message = args.Text;
             DateTime now = DateTime.Now;
-            string allLog = string.Format(
-                "{0}  {1}{2}{3}",
-                imm.Participant.Contact.GetContactInformation(ContactInformationType.DisplayName).ToString().ToUpper(),
-                now.ToString("HH:mm:ss  dd.MM.yyyy"),
-                Environment.NewLine, 
-                args.Text);
 
-            using (var outfile = new StreamWriter(Path.Combine(MyDocsPath, ProgramFolder, AllInOneFileName), true))
-            {
-                outfile.WriteLine(allLog);
-                outfile.Close();
-            }
+            string allLog = Storage.LogToAllInOneFile(senderName, message, now);
 
             foreach (Participant participant in container.Conversation.Participants)
             {
@@ -109,36 +95,13 @@ namespace SkyForBusLH
                 {
                     continue;
                 }
-                string directory = Path.Combine(
-                                        MyDocsPath,
-                                        ProgramFolder,
-                                        participant.Contact.GetContactInformation(ContactInformationType.DisplayName).ToString());
-                EnsureDirectoryExists(directory);
 
-                string filename = string.Format("{0}\\{1}.txt", directory, now.ToString("yyyy-MM-dd"));
-                string log = string.Format(
-                    "{0}  {1}{2}{3}",
-                    imm.Participant.Contact.GetContactInformation(ContactInformationType.DisplayName).ToString().ToUpper(),
-                    now.ToString("HH:mm:ss"), 
-                    Environment.NewLine, 
-                    args.Text);
-
-                using (var partfile = new StreamWriter(filename, true))
-                {
-                    partfile.WriteLine(log);
-                    partfile.Close();
-                }
+                Storage.LogToParticipiantsFiles(senderName,
+                    participant.Contact.GetContactInformation(ContactInformationType.DisplayName).ToString(), message,
+                    now);
             }
 
             ConsoleWriteLine(allLog);
-        }
-
-        private static void EnsureDirectoryExists(string directory)
-        {
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
         }
 
         private LyncClient GetLyncClient()
@@ -192,13 +155,12 @@ namespace SkyForBusLH
 
         private void menuItemOpenAll_Click(object sender, EventArgs e)
         {
-            string filePath = Path.Combine(MyDocsPath, ProgramFolder, AllInOneFileName);
-            if (!File.Exists(filePath))
-            {
-                MessageBox.Show(Resources.HistoryFileDoesNotExist);
-                return;
-            }
-            Process.Start(filePath);
+            Storage.OpenAllInOne();
+        }
+
+        private void menuItemOpenFolder_Click(object sender, EventArgs e)
+        {
+            Storage.OpenStorageFolder();
         }
 
         private bool _closingFromMenu;
@@ -215,11 +177,6 @@ namespace SkyForBusLH
                 WindowState = FormWindowState.Minimized;
                 e.Cancel = true;
             }
-        }
-
-        private void menuItemOpenFolder_Click(object sender, EventArgs e)
-        {
-            Process.Start("explorer.exe", Path.Combine(MyDocsPath, ProgramFolder));
         }
     }
 }
